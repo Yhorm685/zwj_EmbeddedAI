@@ -1,0 +1,4 @@
+# Windows x64, Python 3.12. The CPU wheel is hosted by PyTorch.
+numpy==2.2.6
+pyserial==3.5
+torch @ https://download.pytorch.org/whl/cpu/torch-2.5.1%2Bcpu-cp312-cp312-win_amd64.whl
