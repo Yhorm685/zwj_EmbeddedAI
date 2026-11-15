@@ -26,7 +26,8 @@ class Link:
             if pos >= 0:
                 line = self.pending[:pos]
                 del self.pending[:pos + 1]
-                if self.discard:
+                if self.discard or len(line) > 1024:
+                    self.invalid += int(not self.discard)
                     self.discard = False
                     continue
                 try:

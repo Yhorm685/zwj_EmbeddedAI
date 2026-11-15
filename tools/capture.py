@@ -1,5 +1,6 @@
 """Record one motion batch or examine the sampling quality of a saved batch."""
 import argparse
+from contextlib import ExitStack
 import csv
 import json
 import math
@@ -91,12 +92,15 @@ def record(args):
                 valid_start_ms=2000)
     if csv_path.exists():
         raise FileExistsError(csv_path)
-    with meta_path.open("x", encoding="utf-8") as f:
-        json.dump(meta, f, indent=2, ensure_ascii=False)
     malformed = 0
-    with open_port(args.port) as port, csv_path.open("x", encoding="utf-8", newline="") as output:
+    with ExitStack() as resources:
+        port = resources.enter_context(open_port(args.port))
+        with meta_path.open("x", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+        output = resources.enter_context(csv_path.open("x", encoding="utf-8", newline=""))
         port.reset_input_buffer()
         link = Link(port)
+        link.send("STATUS")
         writer = csv.writer(output)
         writer.writerow(COLUMNS)
         wait_until = time.monotonic() + 8
@@ -109,6 +113,9 @@ def record(args):
                 if finish_at is not None and time.monotonic() >= finish_at:
                     break
                 raise TimeoutError("no samples on UART; capture retained with complete=false")
+            if line.startswith("INFO,"):
+                meta["board_info"] = line
+                continue
             if not line.startswith("S,"):
                 continue
             try:
@@ -124,7 +131,7 @@ def record(args):
     report = quality(csv_path)
     meta.update(quality=report, malformed_lines=malformed + link.invalid,
                 valid_end_ms=max(0, report["device_span_ms"] - 2000 + 1),
-                complete=True)
+                complete=report["valid"] > 0)
     temp = meta_path.with_suffix(".json.partial")
     with temp.open("x", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False, allow_nan=False)
