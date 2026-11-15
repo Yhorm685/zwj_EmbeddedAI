@@ -23,11 +23,11 @@ Set-Location ..
 .\.venv\Scripts\python.exe -m serial.tools.list_ports -v
 ~~~
 
-找到 USB–TTL 的 COM 号。以下以 COM4 为例，替换为实际端口。关闭占用它的串口助手。先接好线再复位板，执行下面第一条查看状态。屏幕每秒显示一条原始样本，传感器状态变化立即显示；按 Ctrl+C 关闭监视器，再执行录制。烧录前先保存需要保留的板内程序。
+找到 USB–TTL 的 COM 号。以下以 COM4 为例，替换为实际端口。关闭占用它的串口助手。先接好线再复位板，执行下面第一条查看状态。屏幕每秒显示一条原始样本，传感器状态变化立即显示；按 Ctrl+C 关闭监视器，再执行录制。下面的版本号对应当前采集版 HEX。如果已经烧录过第一版 decdc3c，该版本也可以录静止基线，记录时填实际烧录的版本号。
 
 ~~~powershell
 .\.venv\Scripts\python.exe -m tools.capture monitor --port COM4
-.\.venv\Scripts\python.exe -m tools.capture record --port COM4 --root evidence/bringup --label still --batch baseline01 --placement bench --orientation '平放，模块 Z 朝上' --firmware-version (git rev-parse --short HEAD) --seconds 60
+.\.venv\Scripts\python.exe -m tools.capture record --port COM4 --root evidence/bringup --label still --batch baseline01 --placement bench --orientation '平放，模块 Z 朝上' --firmware-version 4bbbdd8 --seconds 60
 .\.venv\Scripts\python.exe -m tools.capture inspect evidence/bringup/still/baseline01.csv
 ~~~
 
@@ -43,7 +43,7 @@ Set-Location ..
 腰部固定传感器，记录朝向，电脑放在背包中记录。每次单独启动一批，保持动作约一分钟。静止、走路、跑步各 10 批，批次名例如 still01…still10、walk01…walk10、run01…run10。同一长录制拆段会高估泛化效果。下面以一次走路为例，朝向文字替换为实际观察。
 
 ~~~powershell
-.\.venv\Scripts\python.exe -m tools.capture record --port COM4 --label walk --batch walk01 --seconds 60 --orientation '腰部固定，记录实际 X/Y/Z 朝向' --firmware-version (git rev-parse --short HEAD)
+.\.venv\Scripts\python.exe -m tools.capture record --port COM4 --label walk --batch walk01 --seconds 60 --orientation '腰部固定，记录实际 X/Y/Z 朝向' --firmware-version 4bbbdd8
 ~~~
 
 保留 data/raw 下各批 CSV、JSON。JSON 默认剔除首尾各 2 秒，若中途停下、改变动作或调整传感器，按实际时刻在同名 JSON 的 valid_segments_ms 中标出保留区间。断点、异常状态和未积满的窗口由软件处理。30 批实采齐备后，按[训练与转换说明](../ml/README.md)生成并冻结首版模型。
@@ -60,8 +60,9 @@ cmake --build firmware/build/Release
 Push-Location firmware
 & 'C:\Program Files\SEGGER\JLink_V794k\JLink.exe' -device STM32F407ZG -if SWD -speed 1000 -autoconnect 1 -CommanderScript flash.jlink
 Pop-Location
-.\.venv\Scripts\python.exe -m tools.replay --port COM4 --windows evidence/pc-v1/test_windows.npz --out evidence/board/replay-01 --firmware-version "$(git rev-parse --short HEAD) Release"
+.\.venv\Scripts\python.exe -m tools.replay --port COM4 --windows evidence/pc-v1/test_windows.npz --out evidence/board/replay-01 --firmware-version "$(git rev-parse --short HEAD) Release" --elf firmware/build/Release/firmware.elf
 .\.venv\Scripts\python.exe -m tools.resources firmware/build/Release/firmware.elf
+.\.venv\Scripts\python.exe -m tools.report --summary evidence/board/replay-01/summary.json --elf firmware/build/Release/firmware.elf --out evidence/board/replay-01/report.md
 ~~~
 
 summary.json 中包括窗口数、三个混淆矩阵、各类召回率、logits 平均与最大绝对误差、分类分歧率、板端相对浮点准确率差，以及网络与整窗耗时的平均/P95/最大值。资源报告同时保留 ELF/map 的静态统计和板上堆/栈水位，按[固件说明](../firmware/README.md)解释峰值。
