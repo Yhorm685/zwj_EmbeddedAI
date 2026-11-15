@@ -1,5 +1,6 @@
 // Compile the firmware console unchanged with a simulated UART and deterministic model.
 #include "../../app/console.cpp"
+#include "../../app/newlib_break.hpp"
 #include <cassert>
 #include <string>
 #include <vector>
@@ -19,6 +20,7 @@ uint32_t SystemCoreClock=168000000;
 QueueHandle_t sampleQueue=nullptr;
 volatile uint32_t queueDrops=0;
 uint32_t mainStackFreeMinimum() { return 800; }
+uint32_t newlibHeapPeak() { return 144; }
 unsigned xPortGetMinimumEverFreeHeapSize() {return 7000;}
 int xQueueReceive(QueueHandle_t, void*, unsigned) {return 0;}
 unsigned uxTaskGetSystemState(TaskStatus_t*, unsigned, void*) {return 0;}
@@ -64,8 +66,17 @@ void live(uint32_t seq, uint32_t ms, SensorStatus status=SensorStatus::ok) {
 }
 
 int main() {
+    NewlibBreak heap{};
+    assert(heap.move(0,1024) && heap.bytes==0 && heap.peak==0);
+    assert(heap.move(1024,1024) && heap.bytes==1024 && heap.peak==1024);
+    assert(!heap.move(1,1024) && heap.bytes==1024);
+    assert(!heap.move(PTRDIFF_MIN,1024) && heap.bytes==1024);
+    assert(heap.move(-1024,1024) && heap.bytes==0 && heap.peak==1024);
+    assert(!heap.move(-1,1024) && heap.bytes==0 && heap.peak==1024);
+    assert(!heap.move(PTRDIFF_MAX,1024) && heap.bytes==0 && heap.peak==1024);
     feed("STATUS\r\n");
     assert(sent.back().find("INFO,none,168000000,heap_min_free=7000,")==0);
+    assert(sent.back().find("newlib_heap_peak=144,")!=std::string::npos);
     feed("BEGIN,2\n"); expect("ERR,2,NO_MODEL");
     ready=true;
     feed("BEGIN,4294967296\n"); expect("ERR,0,ID");

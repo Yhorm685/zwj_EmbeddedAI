@@ -28,7 +28,7 @@
 
 5. 上电输出 `#motion-v1,...,model=none` 和连续 `S` 行。串口先打开后复位可以看到启动横幅，随时发送 `STATUS` 加换行可查询当前模型和时钟。先静置录制 60 秒检查序号、设备时间、加速度方向及错误，再按独立批次采集。断开传感器后应看到错误行，恢复连接后会重新探测并积窗。固定实物并拍摄实测记录。以上是预期行为，验收以原始日志和现场记录为依据。
 
-有训练模型后，使用 `cmake --preset Release "-DMOTION_MODEL_HEADER=D:/.../motion_model.h"` 重新配置并构建烧录。以 `INFO` 中的模型标识核对本次导出。采集版本持续输出原始数据，模型未装载时请求回放返回错误。
+有训练模型后，使用 `cmake --preset Release "-DMOTION_MODEL_HEADER=D:/.../model_data.h"` 重新配置并构建烧录。以 `INFO` 中的模型标识核对本次导出。采集版本持续输出原始数据，模型未装载时请求回放返回错误。
 
 ## 采样、滑窗和运行故障
 
@@ -57,4 +57,15 @@ MPU6050 配置 DLPF=4、SMPLRT_DIV=19、加速度 ±8 g（4096 count/g）、角�
 - DWT CYCCNT 使用无符号差值；`net_cycles` 为量化输入就绪至定点网络产生三类输出。`total_cycles` 为完整窗口就绪到类别选出，实时模式含环形窗口有序拷贝，回放模式以已收齐的顺序窗口为起点。采集、串口传输和打印在计时边界之外。记录固件版本、优化级别、时钟、有效样本数和调度条件，计算平均/P95/最大值；运行中允许采样任务和中断抢占。
 - 采样与回放工作区位于普通 128 KiB SRAM，另有 64 KiB CCM。用 ELF/map 的实际装载区域计算完整固件 Flash 占用。链接器报告中的 SRAM 包含预留的 C 堆区和 MSP 栈区。网络常量和固件代码位于 Flash。
 - `INFO` 的 `heap_min_free` 是 16 KiB FreeRTOS 堆观测到的最小余量。`comm_stack_min_free` 与 `sample_stack_min_free` 是动态分配的通信/采样任务栈历史最小余量（分配 4096 / 2048 字节），这两个任务的栈已计入 RTOS 堆分配。`idle_stack_min_free` 和 `timer_stack_min_free` 是静态空闲/定时器任务栈历史最小余量（512 / 1024 字节）。`msp_min_free` 由启动时从主栈下界填入的标记测得，保留当时活跃栈帧和 64 字节保护，保守估计 1024 字节 MSP 的剩余量；它覆盖标记后的运行期。所有余量的单位均为字节。
-- `queue_drops` 指采样入队失败，`rx_errors` 指 UART 硬件/接收环错误，`tx_errors` 指 UART 发送或行构造失败。回放或采集结束时再次请求 STATUS 并保留原文。报告分别列出静态预留、观测到的堆/栈高水位及其测量工况；不同任务各自历史峰值相加只能给出保守上界。
+- `newlib_heap_peak` 是 C 库从链接符号 `_end` 起曾成功申请的最大字节数。`_sbrk` 的链接包装在短临界区内检查边界、移动堆顶并更新历史峰值；收缩后保留先前峰值。可用空间止于 MSP 保留区下界和当前 MSP 的较低者。它与 FreeRTOS 堆独立，链接器的 512 字节 `_Min_Heap_Size` 是预留值。计算以实际 `.data/.bss` 为基数的观测上界时，加 newlib 堆峰值和 MSP 用量；从输出段统计时先剔除 `._user_heap_stack` 中已包含的预留再加运行值。对各任务已预留的栈和 RTOS 堆避免重复累计。
+- `queue_drops` 指采样入队失败，`rx_errors` 指 UART 硬件/接收环错误，`tx_errors` 指 UART 发送或行构造失败。回放或采集结束时再次请求 STATUS 并保留原文。报告分别列出静态预留、观测到的堆/栈高水位及其测量工况。不同任务各自历史峰值相加给出保守上界。
+
+## 电脑端协议回归
+
+从本目录用本机 g++ 编译同一份通信实现。此检查使用模拟串口、时钟和确定性测试模型，覆盖回放与错误处理、滑窗断点、计数回绕、newlib 堆边界及历史峰值；硬件指标单独上板采集。
+
+```powershell
+cmake -E make_directory build
+g++ -std=c++17 -O2 -Wall -Wextra -Werror -Itests/uart/stubs -Iinference tests/uart/test_console.cpp -o build/uart_test.exe
+.\build\uart_test.exe
+```

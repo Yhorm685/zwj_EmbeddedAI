@@ -144,12 +144,19 @@ def main():
     parser.add_argument("--windows", type=Path, default=Path("evidence/pc/test_windows.npz"))
     parser.add_argument("--out", type=Path, default=Path("evidence/board/replay-01"))
     parser.add_argument("--firmware-version", required=True, help="flashed Git commit and build configuration")
+    parser.add_argument("--elf", type=Path, help="exact ELF used to generate the flashed HEX")
     args = parser.parse_args()
+    elf_hash = None
+    if args.elf:
+        with args.elf.open("rb") as elf:
+            elf_hash = hashlib.file_digest(elf, "sha256").hexdigest()
     with np.load(args.windows, allow_pickle=False) as archive, open_port(args.port) as port:
         port.reset_input_buffer()
         metrics = execute(Link(port), archive, args.out, args.firmware_version)
     with args.windows.open("rb") as infile:
         metrics["test_archive_sha256"] = hashlib.file_digest(infile, "sha256").hexdigest()
+    if elf_hash:
+        metrics["elf_sha256"] = elf_hash
     report = json.dumps(metrics, indent=2, ensure_ascii=False, allow_nan=False)
     (args.out / "summary.json").write_text(report + "\n", encoding="utf-8")
     print(report)

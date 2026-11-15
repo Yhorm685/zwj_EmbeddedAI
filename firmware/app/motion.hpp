@@ -14,3 +14,4 @@ struct Sample {
 extern QueueHandle_t sampleQueue;
 extern volatile uint32_t queueDrops;
 uint32_t mainStackFreeMinimum();
+uint32_t newlibHeapPeak();

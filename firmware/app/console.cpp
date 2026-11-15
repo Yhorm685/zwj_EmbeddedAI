@@ -176,10 +176,11 @@ void sendInfo() {
     }
     send("INFO,%s,%lu,heap_min_free=%lu,comm_stack_min_free=%lu,sample_stack_min_free=%lu,"
          "idle_stack_min_free=%lu,timer_stack_min_free=%lu,msp_min_free=%lu,"
-         "queue_drops=%lu,rx_errors=%lu,tx_errors=%lu", motion_model_id(),
+         "newlib_heap_peak=%lu,queue_drops=%lu,rx_errors=%lu,tx_errors=%lu", motion_model_id(),
          static_cast<unsigned long>(SystemCoreClock),
          static_cast<unsigned long>(xPortGetMinimumEverFreeHeapSize()), comm, sample, idle, timer,
-         static_cast<unsigned long>(mainStackFreeMinimum()), static_cast<unsigned long>(queueDrops),
+         static_cast<unsigned long>(mainStackFreeMinimum()), static_cast<unsigned long>(newlibHeapPeak()),
+         static_cast<unsigned long>(queueDrops),
          static_cast<unsigned long>(rxErrors), static_cast<unsigned long>(txErrors));
 }
 
